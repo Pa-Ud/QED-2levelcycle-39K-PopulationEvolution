@@ -35,3 +35,263 @@ def rhon(dt,tn0,yn0,A):
     return tn1,yn1 
 #####################################################################################################
 
+#QED K-39
+import math
+import cmath
+import numpy as np
+import plotly as plt
+import plotly.graph_objs as go
+from plotly import tools
+plt.offline.init_notebook_mode(connected=True)
+from array import array
+import csv
+from scipy.optimize import curve_fit
+import scipy.linalg as la
+
+def c(x,y):
+    return complex(x,y)   
+j = c(0.,1.)
+def TwoLevel39K(IL,detune,vz,B,xt,rho0):
+    #rho0 = [gg0, ee0, eg0, ge0]
+    D1,D2 = 389.286058716e12, 391.01617003e12 #Hz 2Shalf to 2Phalf, 2Shalf to 2P3half   
+    h, hbar, vlight = 6.626e-34, 6.626e-34/(2*np.pi), 299792458 #SI units
+    weg = 2*np.pi*(D2+14.4e6-173.1e6) #Hz, spacing between F=2 and F'=3 in atom's rest frame (B=0).
+    fl = D2 + 14.4e6-173.1e6 + detune*1e6 #Hz laser freq
+    lm = vlight/fl #m laser wavelength
+    tau = 26.37e-9 #s Lifetime of 39-K's D2 line
+    Teg = 1./tau #Hz, decay rate
+    CLeg = 1 #constant calculated in MH's thesis for L=1,e=24,g=8 and sigma+ laser
+    Is = 17.5 #W/m^2 power intensity, 1.7e1 W/m^2 is the saturated intensity
+    OL = np.sqrt(3*lm**3*IL*Is/(8*np.pi*h*vlight*tau))
+    OLeg = CLeg*OL #This is derived in MH's thesis
+
+    kL = 2*np.pi/lm
+    
+    muB = 9.274e-24 #Bohr magneton
+    gJ = 1 #1 is not its value, so gJ needs correct calculation.
+    #B = 0
+    wBJe = muB*gJ*B/hbar
+
+    a1 = -Teg/2 + j*(2*np.pi*fl - weg - kL*vz - wBJe)
+    a2 = -Teg/2 - j*(2*np.pi*fl - weg - kL*vz - wBJe)
+    A1,A2 = [0.*j, Teg+0.*j, -OL*j, OL*j], [0.*j, -Teg+0.*j, OL*j, -OL*j]
+    A3,A4 = [-OL*j, OL*j, a1, 0.*j], [OL*j, -OL*j, 0.*j, a2]
+    A = [A1,A2,A3,A4]
+
+    #print(A)
+    #eiVA = la.eig(A)[1]
+    #eiVAi = la.inv(eiVA)
+    #DiagA = np.round(np.matmul(eiVAi,np.matmul(A,eiVA)),decimals=5)
+    t,rhoK1,rhoRK = [],[],[]
+    rho0K1, rho0RK = rho0,rho0
+    dt = 1*(xt[1]-xt[0])
+    tn0 = 0
+    for i in range(0,len(xt)):
+        tm,rhoK1m = rhon(dt,tn0,rho0K1,A)
+        tm,rhoRKm = yRK(dt,tn0,rho0RK,A)
+        t.append(tn0)
+        rhoK1.append(rho0K1)
+        rhoRK.append(rho0RK)
+        tn0 = tm
+        rho0K1 = rhoK1m
+        rho0RK = rhoRKm
+    y1,y2,y3,y4 = [],[],[],[]
+    for i in range(0,len(t)):
+        y1.append(rhoK1[i][0].real)
+        y2.append(rhoK1[i][1].real)
+        y3.append(rhoRK[i][0].real)
+        y4.append(rhoRK[i][1].real)
+    fig2 = go.Figure()
+    tracea = go.Scatter(
+            name = 'Ground by k1',
+            x = t, y = y1,
+            mode = 'lines',
+            line =dict(
+                width = 5, #symbol = 1,
+                color = 'green'
+            ))
+    traceb = go.Scatter(
+            name = 'Excited by k1',
+            x = t, y = y2,
+            mode = 'lines',
+            line =dict(
+                width = 5, #symbol = 2,
+                color = 'red'
+            ))
+    tracec = go.Scatter(
+            name = 'Ground by RK',
+            x = t, y = y3,
+            mode = 'lines',
+            line =dict(
+                width = 5, #symbol = 3,
+                color = 'green'
+            ))
+    traced = go.Scatter(
+            name = 'Excited by RK',
+            x = t, y = y4,
+            mode = 'lines',
+            line =dict(
+                width = 5, #symbol = 4,
+                color = 'red'
+            ))
+    fig2.add_trace(tracec)
+    fig2.add_trace(traced)
+    #fig2.show()
+    return OL,fig2,t,y4 #return Rabi freq, output t,y4 of the 
+########################################################################################################
+
+#Excited state population vs time
+#IL = 6*53/17.5
+detune = 0
+vz,B = 0,0
+ILar = [1, 2*53/17.5, 6*53/17.5,50], 
+Iname = ['Is: Saturated Intensity','6Is: 1D Optical Molasses','18Is: 3D Optical Molasses','50Is']
+timeend = 2e-7
+xt = np.linspace(0,timeend,int(timeend*1e10))
+rho0 = [c(1.,0.), c(0.,0.), c(0.,0.), c(0.,0.)]
+fig3 = go.Figure()
+colorlist = px.colors.qualitative.Dark24
+setFigureTextStyle = dict(family='Times New Roman', size=10, color='black')
+for i in range(0,len(ILarr)):
+    fRabi,fig2,t,y4 = TwoLevel39K(ILarr[i],detune,vz,B,xt,rho0)
+    tns = np.multiply(t, 1e9)
+    tracei = go.Scatter(
+        name = Iname[i],
+        x = tns, y = y4,
+        mode = 'lines',
+        line =dict(
+            width = 5, color = colorlist[i]
+        ))
+    fig3.add_trace(tracei)
+    
+fig3.update_layout(go.Layout(
+    title= '',
+    width = 550, height = 350,
+    plot_bgcolor = 'white', font = setFigureTextStyle,
+    showlegend = True,
+    xaxis=dict(
+        title='Time [ns]',  
+        showgrid=True, gridcolor='gray', dtick=10, linecolor='black',       ),
+    yaxis=dict(
+        title='Excited state (24) population',
+        showgrid=True, gridcolor='gray', linecolor='black',zerolinecolor='gray',dtick=0.1, ),
+    legend = dict(orientation="v",x=0.6, y=1.05,),
+    ))
+    
+fig3.show()
+#fig3.write_image('SVG_2level-exPopIntensity.svg')
+##################################################################################################
+
+#Excited state population vs time
+IL = 6*53/17.5
+vz,B = 0,0
+detunearr = [15,10,5,0]
+timeend = 2e-7
+xt = np.linspace(0,timeend,int(timeend*1e10))
+rho0 = [c(1.,0.), c(0.,0.), c(0.,0.), c(0.,0.)]
+fig3 = go.Figure()
+colorlist = px.colors.qualitative.Dark24
+setFigureTextStyle = dict(family='Times New Roman', size=10, color='black')
+for i in range(0,len(detunearr)):
+    fRabi,fig2,t,y4 = TwoLevel39K(IL,detunearr[i],vz,B,xt,rho0)
+    tns = np.multiply(t, 1e9)
+    tracei = go.Scatter(
+        name = '|∆| = ' + str(detunearr[i])+'MHz',
+        x = tns, y = y4,
+        mode = 'lines',
+        line =dict(
+            width = 5, color = colorlist[i]
+        ))
+    fig3.add_trace(tracei)
+    
+fig3.update_layout(go.Layout(
+    title= '',
+    width = 550, height = 350,
+    plot_bgcolor = 'white', font = setFigureTextStyle,
+    showlegend = True,
+    xaxis=dict(
+        title='Time [ns]',  
+        showgrid=True, gridcolor='gray', dtick=10, linecolor='black',       ),
+    yaxis=dict(
+        title='Excited state (24) population',
+        showgrid=True, gridcolor='gray', linecolor='black',zerolinecolor='gray',dtick=0.1, ),
+    legend = dict(orientation="v",x=0.75, y=1.05,),
+    ))
+    
+fig3.show()
+#fig3.write_image('SVG_2level-exPopDetune.svg')
+##############################################################################################
+
+#Calculate steady state population
+def exPop(IL,detune,vz):
+    D1,D2 = 389.286058716e12, 391.01617003e12 #Hz 2Shalf to 2Phalf, 2Shalf to 2P3half   
+    h, hbar, vlight = 6.626e-34, 6.626e-34/(2*np.pi), 299792458 #SI units
+    weg = 2*np.pi*(D2+14.4e6-173.1e6) #Hz, spacing between F=2 and F'=3 in atom's rest frame (B=0).
+    fl = D2 + 14.4e6-173.1e6 + detune*1e6 #Hz laser freq
+    lm = vlight/fl #m laser wavelength
+    tau = 26.37e-9 #s Lifetime of 39-K's D2 line
+    Teg = 1./tau #Hz, decay rate
+    CLeg = 1 #constant calculated in MH's thesis for L=1,e=24,g=8 and sigma+ laser
+    Is = 17.5 #W/m^2 power intensity, 1.7e1 W/m^2 is the saturated intensity
+    OL = np.sqrt(3*lm**3*IL*Is/(8*np.pi*h*vlight*tau))
+    kL = 2*np.pi/lm
+
+    b1 = OL**2
+    b2 = 2*b1
+    b3 = (Teg/2)**2
+    b4 = (2*np.pi*fl - weg - kL*vz)**2
+    pop = b1/(b2 + b3 + b4)
+    return pop
+#######################################################################################################
+
+IL = 6*53/17.5  #IL is the 6x optical molases intensity of 64.8mW/3 / circular beam crossection of 1inch diameter
+detune = -82 #MHz
+detunearray = np.linspace(-100,-60,5)
+vzarray = np.linspace(-120,0,200)
+fig3 = go.Figure()
+setFigureTextStyle = dict(family='Times New Roman', size=16, color='black')
+
+for m in range(0,len(detunearray)):
+    detune = detunearray[m]
+    X,Y = [],[]
+    #Color https://plotly.com/python/discrete-color/
+    colorlist = px.colors.qualitative.Dark24
+    for i in range(0,len(vzarray)):
+        vz = vzarray[i]
+        X.append(vz)
+        Y.append(exPop(IL,detune,vz))
+    trace3 = go.Scatter(
+        name = str(detune)+'MHz laser detuning',
+        x = X, y = Y,
+        mode = 'markers+lines',
+        marker =dict(
+            size = 10, symbol = m,
+            color = colorlist[m]
+        ))
+    fig3.add_trace(trace3)
+annotation = 'Laser beam intensity: ~4.4 mW/cm\u00b2<br>per each of 6 trapping beams<br>'
+annotation = annotation + 'No detuning frequency: 391.016011THz'
+fig3.update_layout(go.Layout(
+    title= 'xxxxxxx',
+    width = 1000, height = 600,
+    plot_bgcolor = 'white', font = setFigureTextStyle,
+    xaxis=dict(
+        title='Doppler velocity (m/s)', 
+        showgrid=True, gridcolor='gray', dtick=10, linecolor='black',       ),
+    yaxis=dict(
+        title='Probability of steady state 24',
+        showgrid=True, gridcolor='gray', dtick=0.1, linecolor='black',    ),
+    legend = dict(orientation="v",x=0.7, y=0.9, ),
+    annotations= [dict(
+        text = annotation, 
+        align='left',  showarrow=False,  xref='paper',  yref='paper',
+        bordercolor='black',  borderwidth=1, bgcolor = 'white',
+        x=0.01, y=0.95,    )]
+    ))
+fig3.show()
+svgName = 'SVG_QEDsteadyPop.svg'
+#fig3.write_image(svgName)
+############################################################################################
+
+
+
