@@ -1,0 +1,37 @@
+Creator: Parinya Udommai, Date 21/9/21
+#QED K-39
+import math
+import cmath
+import numpy as np
+import plotly as py
+import plotly.graph_objs as go
+from plotly import tools
+
+from array import array
+import csv
+from scipy.optimize import curve_fit
+import scipy.linalg as la
+import os
+import plotly.express as px
+def c(x,y):
+    return complex(x,y)
+######################################################################################################
+
+#Runge-Kutta methods (Euler) https://en.wikipedia.org/wiki/Euler_method https://en.wikipedia.org/wiki/Runge%E2%80%93Kutta_methods
+def yRK(dt,tn0,rhon0,A): #this is equivalent to d rho(t)/dt
+    k1 = np.matmul(A,rhon0) #dy/dt(tn0,yn0)
+    k2 = np.matmul(A,rhon0+0.5*dt*k1)
+    k3 = np.matmul(A,rhon0+0.5*dt*k2)
+    k4 = np.matmul(A,rhon0+0.5*dt*k3)
+    tn1 = tn0 + dt
+    rhon1 = rhon0 + (dt/6)*(k1 + 2*k2 + 2*k3 + k4)
+    return tn1,rhon1
+
+def rhon(dt,tn0,yn0,A):
+    k1 = np.matmul(A,yn0) #rhodot(tn0,yn0)
+    #yn1 = yn0 + (1./6)*h*(k1 +2*k2 +2*k3 +k4)
+    yn1 = yn0 + dt*k1
+    tn1 = tn0 + dt
+    return tn1,yn1 
+#####################################################################################################
+
